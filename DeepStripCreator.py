@@ -94,7 +94,7 @@ def generate_strip_row(image, polygon, current_position, last_index: int, out_wi
     eval_pos = current_position - ((out_width / 2) * norm_step)
     # loop through and step until reaching the other end
     for i in range(out_width):
-        pixel_map.append(eval_pos)
+        pixel_map.append(eval_pos.copy())
         pixel_values.append(bilinear_interpolate(image, eval_pos))
         eval_pos += norm_step
     return np.asarray(pixel_values), np.asarray(pixel_map)

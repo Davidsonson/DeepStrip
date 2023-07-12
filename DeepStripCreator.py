@@ -150,14 +150,23 @@ def create_strip(rgb_image: np.array, mask: np.array, strip_w: int = 80, strip_h
             current_point = squeezed_c[last_index]
     return np.asarray(strip_img), np.asarray(strip2out)
 
+
+def reconstruct_strip(original_image, strip_image, pixel_map, shift_amt):
+    rounded_pixel_map = np.round(pixel_map).astype(int)
+    new_img = np.zeros_like(original_image)
+    h, w, _ = new_img.shape
+    idx = rounded_pixel_map.reshape(-1, 2)
+    new_img[np.clip(idx[:, 0] - shift_amt, 0, h-1), np.clip(idx[:, 1] - shift_amt, 0, w-1)] = strip_image.reshape(-1, 3)
+    return new_img
+
 x = cv2.imread('original_img.PNG', cv2.IMREAD_UNCHANGED)
-# x = cv2.resize(x, (1024, 1024))
 rgb = x[:, :, :-1] / 255
 alpha = x[:, :, -1]
 mask = np.where(alpha > 50, 1, 0).astype(np.uint8)
 
 strip_img, pix_map = create_strip(rgb, mask)
-print(rgb.shape)
-print(np.max(pix_map))
+
+reconstructed_image = reconstruct_strip(rgb, strip_img, pix_map, 80)
 cv2.imwrite("strip.jpg", np.round(255*strip_img))
 np.save('pixel_map', pix_map, allow_pickle=True)
+cv2.imwrite("reconstructed.jpg", np.round(255*reconstructed_image))

@@ -36,41 +36,27 @@ def determine_next_point_on_polygon(polygon, current_position, last_index, step_
     return new_position, current_index, stop_this_poly
 
 
-def bilinear_interpolate(image, point):
+def bilinear_interpolate_many(image, Xs, Ys):
     """
-    calculate pixel values at a given point even if that point is not an integer
-    :param image: image as np.array
-    :param point: position at which to calculate pixel value(s)
-    :return: np.array of the calculated values
+
+    :param image: np array of the image
+    :param Xs: x values to evaluate at
+    :param Ys: y values to evaluate at
+    :return: image interpolated at supplied positions
     """
-    x, y = point
-    x1 = int(np.floor(x))
-    x2 = int(np.ceil(x))
-    y1 = int(np.floor(y))
-    y2 = int(np.ceil(y))
-    if x1 == x and y1 == y:
-        return image[x1, y1]
-    elif x1 == x:
-        Q11 = image[x1, y1]
-        Q12 = image[x1, y2]
-        denom = (y2 - y1)
-        numerator = Q11 * (y2 - y)
-        numerator += Q12 * (y - y1)
-    elif y1 == y:
-        Q11 = image[x1, y1]
-        Q12 = image[x2, y1]
-        denom = (x2 - x1)
-        numerator = Q11 * (x2 - x)
-        numerator += Q12 * (x - x1)
-    else:
-        Q11 = image[x1, y1]
-        Q12 = image[x1, y2]
-        Q21 = image[x2, y1]
-        Q22 = image[x2, y2]
-        denom = (x2 - x1) * (y2 - y1)
-        numerator = Q11 * (x2 - x) * (y2 - y) + Q21 * (x - x1) * (y2 - y)
-        numerator += Q12 * (x2 - x) * (y - y1) + Q22 * (x - x1) * (y - y1)
-    return numerator / denom
+    X1 = np.floor(Xs).astype(int)
+    X2 = X1 + 1
+    Y1 = np.floor(Ys).astype(int)
+    Y2 = Y1 + 1
+    Q11 = image[X1, Y1]
+    Q12 = image[X1, Y2]
+    Q21 = image[X2, Y1]
+    Q22 = image[X2, Y2]
+    result = Q11 * np.expand_dims((X2 - Xs) * (Y2 - Ys), -1)
+    result += Q21 * np.expand_dims((Xs - X1) * (Y2 - Ys), -1)
+    result += Q12 * np.expand_dims((X2 - Xs) * (Ys - Y1), -1)
+    result += Q22 * np.expand_dims((Xs - X1) * (Ys - Y1), -1)
+    return result
 
 
 def generate_strip_row(image, polygon, current_position, last_index: int, out_width: int):
@@ -88,16 +74,12 @@ def generate_strip_row(image, polygon, current_position, last_index: int, out_wi
     unit_step = calculate_unit_step(current_position, polygon[last_index + 1])
     # negative inverse to convert to the normal direction
     norm_step = np.array([-1 * unit_step[1], unit_step[0]])
-    pixel_values = []
-    pixel_map = []
     # start at one end
-    eval_pos = current_position - ((out_width / 2) * norm_step)
-    # loop through and step until reaching the other end
-    for i in range(out_width):
-        pixel_map.append(eval_pos.copy())
-        pixel_values.append(bilinear_interpolate(image, eval_pos))
-        eval_pos += norm_step
-    return np.asarray(pixel_values), np.asarray(pixel_map)
+    start_pos = current_position - ((out_width / 2) * norm_step)
+    end_pos = current_position + ((out_width / 2) * norm_step)
+    X = np.linspace(start_pos[0], end_pos[0], out_width)
+    Y = np.linspace(start_pos[1], end_pos[1], out_width)
+    return bilinear_interpolate_many(image, X, Y), np.stack((X, Y), axis=1)
 
 
 def create_strip(rgb_image: np.array, mask: np.array, strip_w: int = 80, strip_h: int = 4096, min_contour_len=100):
@@ -121,8 +103,11 @@ def create_strip(rgb_image: np.array, mask: np.array, strip_w: int = 80, strip_h
 
     # calculate total arc length of all contours
     perimeter = 0
-    for cnt in contours:
+    for i in range(len(contours)):
+        peri = cv2.arcLength(contours[i], True)
+        cnt = cv2.approxPolyDP(contours[i], 0.0025 * peri, True)
         perimeter += cv2.arcLength(cnt, True)
+        contours[i] = cnt
     # tangential step length along the contours to generate image of desired size
     tan_step_length = perimeter / strip_h
 
@@ -165,15 +150,14 @@ def create_strip(rgb_image: np.array, mask: np.array, strip_w: int = 80, strip_h
             current_point = squeezed_c[last_index]
     return np.asarray(strip_img), np.asarray(strip2out)
 
-
 x = cv2.imread('original_img.PNG', cv2.IMREAD_UNCHANGED)
-
+# x = cv2.resize(x, (1024, 1024))
 rgb = x[:, :, :-1] / 255
 alpha = x[:, :, -1]
 mask = np.where(alpha > 50, 1, 0).astype(np.uint8)
 
 strip_img, pix_map = create_strip(rgb, mask)
-
-cv2.imwrite("strip.jpg", strip_img)
+print(rgb.shape)
+print(np.max(pix_map))
+cv2.imwrite("strip.jpg", np.round(255*strip_img))
 np.save('pixel_map', pix_map, allow_pickle=True)
-

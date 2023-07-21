@@ -158,15 +158,3 @@ def reconstruct_strip(original_image, strip_image, pixel_map, shift_amt):
     idx = rounded_pixel_map.reshape(-1, 2)
     new_img[np.clip(idx[:, 0] - shift_amt, 0, h-1), np.clip(idx[:, 1] - shift_amt, 0, w-1)] = strip_image.reshape(-1, 3)
     return new_img
-
-x = cv2.imread('original_img.PNG', cv2.IMREAD_UNCHANGED)
-rgb = x[:, :, :-1] / 255
-alpha = x[:, :, -1]
-mask = np.where(alpha > 50, 1, 0).astype(np.uint8)
-
-strip_img, pix_map = create_strip(rgb, mask)
-
-reconstructed_image = reconstruct_strip(rgb, strip_img, pix_map, 80)
-cv2.imwrite("strip.jpg", np.round(255*strip_img))
-np.save('pixel_map', pix_map, allow_pickle=True)
-cv2.imwrite("reconstructed.jpg", np.round(255*reconstructed_image))
